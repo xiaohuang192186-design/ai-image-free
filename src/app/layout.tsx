@@ -9,29 +9,30 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "AI Free Image Generator - Create Stunning Images Free",
+  title: {
+    default: "AI Free Image Generator - Text to Image",
+    template: "%s | AI Free Image",
+  },
   description:
-    "Free AI image generator powered by Z-Image-Turbo. Create beautiful images from text prompts. No sign-up, unlimited generations.",
+    "Free AI image generator. Create images from text prompts. No sign-up required. Rate limits apply.",
   keywords: [
     "AI image generator",
     "free AI image generator",
     "text to image",
     "AI art",
-    "image generation",
     "Z-Image-Turbo",
-    "free AI art generator",
-    "no sign-up image generator",
   ],
   openGraph: {
-    title: "AI Free Image Generator - Create Stunning Images Free",
-    description:
-      "Free AI image generator powered by Z-Image-Turbo. Create beautiful images from text prompts. No sign-up, unlimited generations.",
+    title: "AI Free Image Generator",
+    description: "Create images from text. Free to use with fair rate limits.",
     type: "website",
-    locale: "en_US",
   },
-  robots: {
-    index: true,
-    follow: true,
+  robots: { index: true, follow: true },
+  alternates: {
+    languages: {
+      en: "/",
+      zh: "/zh",
+    },
   },
 };
 
@@ -40,26 +41,34 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const adsense = process.env.NEXT_PUBLIC_ADSENSE_ID;
+  const ga = process.env.NEXT_PUBLIC_GA_ID;
+
   return (
     <html lang="en" className={inter.variable}>
       <head>
-        {/* Google AdSense — replace ca-pub-XXXXXXXXXX with your publisher ID
-        <script
-          async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXX"
-          crossOrigin="anonymous"
-        />
-        */}
-
-        {/* Google Analytics — replace G-XXXXXXXXXX with your measurement ID
-        <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX" />
-        <script dangerouslySetInnerHTML={{__html:`
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          gtag('js', new Date());
-          gtag('config', 'G-XXXXXXXXXX');
-        `}} />
-        */}
+        {adsense ? (
+          <script
+            async
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsense}`}
+            crossOrigin="anonymous"
+          />
+        ) : null}
+        {ga ? (
+          <>
+            <script async src={`https://www.googletagmanager.com/gtag/js?id=${ga}`} />
+            <script
+              dangerouslySetInnerHTML={{
+                __html: `
+                  window.dataLayer = window.dataLayer || [];
+                  function gtag(){dataLayer.push(arguments);}
+                  gtag('js', new Date());
+                  gtag('config', '${ga}');
+                `,
+              }}
+            />
+          </>
+        ) : null}
       </head>
       <body className={`${inter.className} antialiased`}>{children}</body>
     </html>

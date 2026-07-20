@@ -22,7 +22,20 @@ npm run check-env
 npm run dev
 ```
 
-Open http://localhost:3000
+Open http://localhost:3000 （英文）  
+中文页：http://localhost:3000/zh  
+
+## 🛡 已修复项（相对 imagefree 对比）
+
+| 步骤 | 内容 | 状态 |
+|------|------|------|
+| P0 | IP 每分钟 / 每 IP 每天 / 全站每天 限流 | ✅ |
+| P0 | 分辨率对齐 imagefree（含 1024×576 / 576×1024） | ✅ |
+| P1 | `/zh` 中文落地页 + 中英切换 | ✅ |
+| P1 | Cloudflare Turnstile 可选接入 | ✅ 配 env 即启用 |
+| P2 | AdSense / GA 环境变量自动注入 | ✅ 填 ID 即挂 |
+
+限流默认：`10/分钟` · `30/IP/天` · `500/全站/天`（可用 env 改）。
 
 ## 🔑 配置
 

@@ -1,10 +1,6 @@
 /**
  * POST /api/generate
- * Generate an AI image from a text prompt.
- *
- * Flow: prompt → (DashScope 百炼 | HF fal Z-Image-Turbo) → R2 → public URL
- *
- * Rate limited at 10 req/min per IP (in-memory, per-instance).
+ * prompt → (可选 Turnstile) → 限流 → 生图 → R2 → imageUrl
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -16,52 +12,14 @@ import {
 } from "@/lib/generate";
 import { uploadToR2, generateFilename } from "@/lib/r2";
 import { VALID_RATIOS, AspectRatio } from "@/lib/dimensions";
+import { consumeRateLimit, getClientIP } from "@/lib/rate-limit";
+import { verifyTurnstile } from "@/lib/turnstile";
 
-// DashScope 同步生图可能较慢；Hobby 约 10s 硬限，Pro 可更长
 export const maxDuration = 60;
 export const runtime = "nodejs";
 
-// ---- In-memory rate limiter (per instance, resets on cold start) ----
-const rateWindow = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT = 10; // requests
-const RATE_WINDOW = 60; // seconds
-const RATE_CLEANUP_MS = 5 * 60 * 1000;
-
-function getClientIP(request: NextRequest): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    "unknown"
-  );
-}
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = rateWindow.get(ip);
-
-  if (rateWindow.size > 1000) {
-    for (const [key, val] of rateWindow) {
-      if (now - val.resetAt > RATE_CLEANUP_MS) rateWindow.delete(key);
-    }
-  }
-
-  if (!entry || now > entry.resetAt) {
-    rateWindow.set(ip, { count: 1, resetAt: now + RATE_WINDOW * 1000 });
-    return true;
-  }
-
-  entry.count++;
-  return entry.count <= RATE_LIMIT;
-}
-
 export async function POST(request: NextRequest) {
   const ip = getClientIP(request);
-  if (!checkRateLimit(ip)) {
-    return NextResponse.json(
-      { error: "Too many requests. Please wait and try again." },
-      { status: 429, headers: { "Retry-After": String(RATE_WINDOW) } }
-    );
-  }
 
   let body: unknown;
   try {
@@ -70,18 +28,54 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (!body || typeof (body as Record<string, unknown>).prompt !== "string") {
+  const record = body as Record<string, unknown>;
+
+  // ---- Turnstile（配置了 SECRET 才强制）----
+  const turnstileToken =
+    typeof record.turnstile_token === "string"
+      ? record.turnstile_token
+      : typeof record.turnstileToken === "string"
+        ? record.turnstileToken
+        : undefined;
+
+  const tv = await verifyTurnstile(turnstileToken, ip);
+  if (!tv.ok) {
+    return NextResponse.json(
+      { error: tv.message || "Human verification failed." },
+      { status: 400 }
+    );
+  }
+
+  // ---- 限流 ----
+  const rl = consumeRateLimit(ip);
+  if (!rl.ok) {
+    return NextResponse.json(
+      {
+        error: rl.message,
+        reason: rl.reason,
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rl.retryAfterSec) },
+      }
+    );
+  }
+
+  // ---- 参数 ----
+  if (!record || typeof record.prompt !== "string") {
     return NextResponse.json({ error: "Missing 'prompt' field" }, { status: 400 });
   }
 
-  const prompt = ((body as Record<string, string>).prompt ?? "")
-    .trim()
-    .slice(0, 1000);
+  const prompt = record.prompt.trim().slice(0, 1000);
   if (!prompt) {
     return NextResponse.json({ error: "Prompt cannot be empty" }, { status: 400 });
   }
 
-  const rawRatio = (body as Record<string, string>).aspect_ratio ?? "1:1";
+  const rawRatio =
+    (typeof record.aspect_ratio === "string" && record.aspect_ratio) ||
+    (typeof record.aspectRatio === "string" && record.aspectRatio) ||
+    "1:1";
+
   if (!VALID_RATIOS.includes(rawRatio as AspectRatio)) {
     return NextResponse.json(
       {
@@ -106,12 +100,13 @@ export async function POST(request: NextRequest) {
       seed,
       provider: provider ?? resolveProvider(),
       model,
+      quota: rl.remaining,
     });
   } catch (err) {
     if (err instanceof HFModelLoadingError) {
       return NextResponse.json(
         {
-          error: "Model is warming up. Please retry.",
+          error: "Model is warming up. Please retry. / 模型预热中，请重试。",
           retryAfter: err.retryAfter,
         },
         { status: 503, headers: { "Retry-After": String(err.retryAfter) } }
@@ -120,7 +115,10 @@ export async function POST(request: NextRequest) {
 
     if (err instanceof HFRateLimitError) {
       return NextResponse.json(
-        { error: "Service is busy. Please try again in a moment." },
+        {
+          error:
+            "Service is busy. Please try again later. / 服务繁忙，请稍后再试。",
+        },
         { status: 503, headers: { "Retry-After": "30" } }
       );
     }
@@ -131,7 +129,7 @@ export async function POST(request: NextRequest) {
     );
 
     return NextResponse.json(
-      { error: "Generation failed. Please try again." },
+      { error: "Generation failed. Please try again. / 生成失败，请重试。" },
       { status: 500 }
     );
   }
