@@ -16,8 +16,13 @@ export async function GET() {
     contentNote: nsfw
       ? "hf/fal Z-Image path; platform filters weak — legal adult only; no DashScope"
       : "provider per IMAGE_PROVIDER",
+    hasFalKey: Boolean(
+      process.env.FAL_KEY?.trim() || process.env.FAL_API_KEY?.trim()
+    ),
     hasHfToken: Boolean(process.env.HF_TOKEN),
     hasDashScopeKey: Boolean(process.env.DASHSCOPE_API_KEY),
+    falEndpoint:
+      process.env.FAL_MODEL_URL || "https://fal.run/fal-ai/z-image/turbo",
     dashscopeModel: process.env.DASHSCOPE_MODEL || "z-image-turbo",
     turnstileRequired: isTurnstileRequired(),
     hasTurnstileSiteKey: Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY),

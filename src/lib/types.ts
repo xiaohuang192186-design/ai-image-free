@@ -3,7 +3,7 @@ export interface GenerationResult {
   imageBytes: Buffer;
   seed: number;
   /** which backend produced the image */
-  provider?: "hf" | "dashscope";
+  provider?: "hf" | "dashscope" | "fal";
   /** model id when known */
   model?: string;
 }
