@@ -21,7 +21,7 @@ const ASPECT_RATIOS: { value: AspectRatio; label: string }[] = [
   { value: "3:4", label: "3:4" },
 ];
 
-/** 前端可选模型：默认 HF 透传（成人向更松）；fal 备用；百炼有审 */
+/** 前端只展示用途；后端仍映射 provider/model */
 type ModelChoice = {
   id: string;
   provider: "hf" | "fal" | "dashscope";
@@ -36,56 +36,56 @@ const MODEL_CHOICES: ModelChoice[] = [
   {
     id: "hf-z",
     provider: "hf",
-    labelEn: "Z-Image (HF · default)",
-    labelZh: "Z-Image 推荐",
-    hintEn: "Via HF Router · looser filters (tested)",
-    hintZh: "HF 透传 · 成人向更松（实测）",
+    labelEn: "Everyday / free-style",
+    labelZh: "日常随手画",
+    hintEn: "Fast, general purpose, recommended",
+    hintZh: "快速通用，默认推荐",
   },
   {
     id: "fal-z",
     provider: "fal",
-    labelEn: "Z-Image (fal direct)",
-    labelZh: "Z-Image fal直连",
-    hintEn: "Backup when HF credits empty · stricter NSFW",
-    hintZh: "HF 没额度时备用 · 成人向更严",
+    labelEn: "Backup / overflow",
+    labelZh: "备用通道",
+    hintEn: "When primary is busy or out of quota",
+    hintZh: "主通道额度不足或繁忙时用",
   },
   {
     id: "qwen-2",
     provider: "dashscope",
     model: "qwen-image-2.0",
-    labelEn: "Qwen-Image 2.0",
-    labelZh: "千问 2.0",
-    hintEn: "Best text & edit · moderated (Bailian)",
-    hintZh: "文字/改图强 · 百炼有审核",
+    labelEn: "Posters & text",
+    labelZh: "海报文字",
+    hintEn: "Sharp Chinese text, layouts, iterations",
+    hintZh: "中文排版、海报、反复改图",
   },
   {
     id: "qwen-2-pro",
     provider: "dashscope",
     model: "qwen-image-2.0-pro",
-    labelEn: "Qwen-Image 2.0 Pro",
-    labelZh: "千问 2.0 Pro",
-    hintEn: "Higher quality Qwen · moderated",
-    hintZh: "千问更高画质 · 有审核",
+    labelEn: "Creative polish",
+    labelZh: "精细创作",
+    hintEn: "Higher detail for refined artwork",
+    hintZh: "更高细节，精品出图",
   },
   {
     id: "wan-pro",
     provider: "dashscope",
     model: "wan2.7-image-pro",
-    labelEn: "Wan 2.7 Pro",
-    labelZh: "万相 2.7 Pro",
-    hintEn: "4K / complex scenes · moderated",
-    hintZh: "复杂指令/4K · 有审核",
+    labelEn: "Commercial / complex",
+    labelZh: "商业复杂场景",
+    hintEn: "Multi-subject, 4K-style control",
+    hintZh: "多角色、复杂指令、精细控制",
   },
 ];
 
 const COPY = {
   en: {
     title: "AI Image Generator",
-    subtitle: "Default: Z-Image via HF (looser). fal = backup. Qwen = moderated.",
+    subtitle: "Pick a use case, describe your image, generate.",
     placeholder:
       "Describe the image you want to create... e.g. A magical forest with glowing mushrooms, digital art",
     ratio: "Ratio",
-    model: "Model",
+    model: "Use case",
     generate: "Generate",
     generating: "Generating...",
     download: "Download",
@@ -96,7 +96,7 @@ const COPY = {
     emptyHint: "Enter a prompt above and click Generate",
     examples: "Try these examples",
     creating: "Creating your image...",
-    footer: "Powered by AI · Rate limits apply · Bailian models are content-moderated",
+    footer: "Powered by AI · Fair use rate limits apply",
     switchLang: "中文",
     switchHref: "/zh",
     needTurnstile: "Please complete human verification first.",
@@ -104,11 +104,11 @@ const COPY = {
   },
   zh: {
     title: "免费 AI 图片生成器",
-    subtitle: "默认 HF 透传 Z-Image（成人向更松）· fal 备用 · 千问有审",
+    subtitle: "选择用途，输入描述，一键出图",
     placeholder:
       "描述你想生成的图片… 例如：雨夜霓虹街头的小提琴手，电影感，浅景深",
     ratio: "比例",
-    model: "模型",
+    model: "用途",
     generate: "生成",
     generating: "生成中...",
     download: "下载",
@@ -119,7 +119,7 @@ const COPY = {
     emptyHint: "在上方输入描述，点击生成",
     examples: "试试这些提示词",
     creating: "正在创作你的图片...",
-    footer: "AI 驱动 · 有频率限制 · 千问/万相走百炼内容审核",
+    footer: "AI 驱动 · 为公平使用设有频率限制",
     switchLang: "English",
     switchHref: "/",
     needTurnstile: "请先完成人机验证。",
