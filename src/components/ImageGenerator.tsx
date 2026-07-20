@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { DIMENSIONS, type AspectRatio } from "@/lib/dimensions";
 import TurnstileWidget from "./TurnstileWidget";
+import SiteChrome from "./SiteChrome";
 
 export type Locale = "en" | "zh";
 
@@ -97,8 +99,6 @@ const COPY = {
     examples: "Try these examples",
     creating: "Creating your image...",
     footer: "Powered by AI · Fair use rate limits apply",
-    switchLang: "中文",
-    switchHref: "/zh",
     needTurnstile: "Please complete human verification first.",
     ads: "AdSense Banner 728×90",
   },
@@ -120,8 +120,6 @@ const COPY = {
     examples: "试试这些提示词",
     creating: "正在创作你的图片...",
     footer: "AI 驱动 · 为公平使用设有频率限制",
-    switchLang: "English",
-    switchHref: "/",
     needTurnstile: "请先完成人机验证。",
     ads: "广告位 728×90",
   },
@@ -150,10 +148,11 @@ interface Props {
   locale?: Locale;
 }
 
-export default function ImageGenerator({ locale = "en" }: Props) {
+function ImageGeneratorInner({ locale = "en" }: Props) {
   const t = COPY[locale];
   const examples = EXAMPLES[locale];
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
+  const searchParams = useSearchParams();
 
   const [prompt, setPrompt] = useState("");
   const [ratio, setRatio] = useState<AspectRatio>("1:1");
@@ -171,6 +170,14 @@ export default function ImageGenerator({ locale = "en" }: Props) {
   const hasImage = genState.status === "done" && genState.imageUrl !== null;
 
   const dims = useMemo(() => DIMENSIONS[ratio] || DIMENSIONS["1:1"], [ratio]);
+
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q) {
+      setPrompt(q);
+      textareaRef.current?.focus();
+    }
+  }, [searchParams]);
 
   const handleGenerate = useCallback(async () => {
     const trimmed = prompt.trim();
@@ -309,15 +316,9 @@ export default function ImageGenerator({ locale = "en" }: Props) {
   );
 
   return (
-    <div className="relative z-10 min-h-screen flex flex-col">
+    <SiteChrome locale={locale}>
       <main className="flex-1 flex flex-col items-center px-4 py-8 sm:py-12 md:py-16">
         <header className="text-center mb-8 sm:mb-10 animate-fade-in-up relative w-full max-w-2xl">
-          <a
-            href={t.switchHref}
-            className="absolute right-0 top-0 text-xs text-[#8b5cf6] hover:text-[#a78bfa] underline-offset-2 hover:underline"
-          >
-            {t.switchLang}
-          </a>
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3">
             <span className="gradient-text">🎨 {t.title}</span>
           </h1>
@@ -566,13 +567,14 @@ export default function ImageGenerator({ locale = "en" }: Props) {
           </section>
         )}
       </main>
+    </SiteChrome>
+  );
+}
 
-      <footer className="text-center py-6 px-4 border-t border-white/[0.06]">
-        <p className="text-xs text-[#4a4a4a]">{t.footer}</p>
-        <p className="text-xs text-[#3a3a3a] mt-1">
-          © {new Date().getFullYear()} AI Image Generator
-        </p>
-      </footer>
-    </div>
+export default function ImageGenerator(props: Props) {
+  return (
+    <Suspense fallback={<div className="min-h-screen" />}>
+      <ImageGeneratorInner {...props} />
+    </Suspense>
   );
 }
