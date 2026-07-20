@@ -1,8 +1,14 @@
 # 🎨 AI Free Image Generator
 
-> **AI image generator — Z-Image-Turbo + Vercel + Cloudflare R2**
+> Z-Image-Turbo / 千问文生图 + Vercel + Cloudflare R2  
+> **对用户可免费开放**；**算力按上游计费**（不是无限 $0）
 
-Turn words into stunning images for free. No sign-up, no limits, no content filtering.
+文生图站点。支持两种推理后端，可切换：
+
+| Provider | 环境变量 | 模型 | 说明 |
+|----------|----------|------|------|
+| **阿里云百炼 DashScope**（推荐） | `DASHSCOPE_API_KEY` | `z-image-turbo` / `qwen-image*` | 官方千问/通义，新人常有免费额度 |
+| **HuggingFace → fal-ai** | `HF_TOKEN` | Z-Image-Turbo | Router 透传 fal，有 HF 月赠额度（Free 约 $0.10） |
 
 ## ⚡ Quick Start
 
@@ -10,112 +16,128 @@ Turn words into stunning images for free. No sign-up, no limits, no content filt
 git clone <your-repo-url>
 cd ai-imagefree
 cp .env.example .env.local
-# Fill in .env.local with your keys (see below)
+# 编辑 .env.local：至少填 R2 + (DASHSCOPE_API_KEY 或 HF_TOKEN)
 npm install
+npm run check-env
 npm run dev
 ```
 
-Open http://localhost:3000 and start generating.
+Open http://localhost:3000
 
-## 🔑 Getting Your API Keys
+## 🔑 配置
 
-### HuggingFace (AI Model)
-1. Sign up: https://huggingface.co/join
-2. Go to Settings → Access Tokens
-3. Create token with **Read** permission
-4. Copy to `HF_TOKEN` in `.env.local`
+### 1) 选推理后端
 
-### Cloudflare R2 (Image Storage)
-1. Sign up: https://dash.cloudflare.com/sign-up
-2. Go to R2 → Create Bucket (name it anything)
-3. Enable **Public Access** via r2.dev subdomain
-4. Go to R2 → Manage API Tokens → Create API Token
-   - Permission: **Object Read & Write**
-   - Select your bucket
-5. Copy credentials:
-   - `R2_ACCESS_KEY_ID` — from token details
-   - `R2_SECRET_ACCESS_KEY` — from token details
-   - `R2_ENDPOINT` — `https://<accountid>.r2.cloudflarestorage.com`
-   - `R2_PUBLIC_URL` — `https://pub-<hash>.r2.dev` (from bucket settings)
+```env
+# auto = 有 DASHSCOPE_API_KEY 就用百炼，否则 HF
+IMAGE_PROVIDER=auto
+```
 
-## 🚀 Deploy to Vercel (1 click)
+### 2A) 阿里云百炼（千问 / z-image）— 推荐
 
-1. Push to GitHub
-2. Go to https://vercel.com/import
-3. Import your repo
-4. Add all environment variables (same as `.env.local`)
-5. Deploy
+1. 打开 https://bailian.console.aliyun.com/  
+2. 开通模型服务，创建 **API-KEY**：https://bailian.console.aliyun.com/?apiKey=1  
+3. 写入：
 
-**Live at**: `https://ai-image-free.vercel.app`
+```env
+IMAGE_PROVIDER=dashscope
+DASHSCOPE_API_KEY=sk-xxxxxxxx
+# 可选模型：
+DASHSCOPE_MODEL=z-image-turbo
+# DASHSCOPE_MODEL=qwen-image
+# DASHSCOPE_MODEL=qwen-image-plus
+# DASHSCOPE_MODEL=qwen-image-2.0
+# DASHSCOPE_MODEL=qwen-image-2.0-pro
+```
 
-## 💰 Monetization (Optional)
+文档：
 
-Add Google AdSense:
-1. Sign up: https://adsense.google.com
-2. Get your publisher ID (`ca-pub-XXXXXXXXXX`)
-3. Set `NEXT_PUBLIC_ADSENSE_ID` in env
-4. Uncomment the AdSense script in `src/app/layout.tsx`
-5. Replace the placeholder banner in `src/app/page.tsx`
+- Z-Image：https://help.aliyun.com/zh/model-studio/z-image-api-reference  
+- 千问文生图：https://help.aliyun.com/zh/model-studio/qwen-image-api  
+- 模型价格/新人额度：以百炼控制台与官方「模型价格」页为准  
 
-## 📊 Cost Breakdown
+### 2B) HuggingFace + fal（备选）
 
-| Service | Monthly Free Tier | Notes |
-|---------|------------------|-------|
-| Vercel | 100 GB bandwidth, 1M function calls | ✅ Free |
-| Cloudflare R2 | 10 GB storage, 10M reads | ✅ Free |
-| **HF Router + fal-ai** | **Free tier + pay-per-use** | ⚠️ Check `huggingface.co/settings/billing` |
+1. https://huggingface.co/settings/tokens → Read Token  
+2. `HF_TOKEN=hf_...`  
+3. 实际路径：`router.huggingface.co/fal-ai/fal-ai/z-image/turbo`（**不是**无限免费 serverless）
 
-> ⚠️ Z-Image-Turbo is NOT on HF's free inference API. It runs through HF Router → fal-ai provider, which has a free tier but may charge after. Check your HF billing page for actual costs.
+### 3) Cloudflare R2
+
+1. https://dash.cloudflare.com → R2 → Create Bucket  
+2. 开启 Public Access（r2.dev）  
+3. 创建 API Token（Object Read & Write）  
+
+```env
+R2_ACCESS_KEY_ID=...
+R2_SECRET_ACCESS_KEY=...
+R2_BUCKET_NAME=...
+R2_ENDPOINT=https://<accountid>.r2.cloudflarestorage.com
+R2_PUBLIC_URL=https://pub-<hash>.r2.dev
+```
+
+## 🚀 Deploy to Vercel
+
+1. 推送 GitHub  
+2. https://vercel.com/import  
+3. 填环境变量（与 `.env.local` 相同）  
+4. Deploy  
+
+线上示例：https://ai-image-free.vercel.app  
+
+**注意：** Vercel Hobby 函数超时约 10s。百炼同步生图偶发更长 → 可能超时；可升级 Pro 或后续改异步。
+
+## 💰 成本说明（重要）
+
+| 组件 | 成本 |
+|------|------|
+| Vercel Hobby | 免费额度内 ≈ $0 |
+| Cloudflare R2 免费档 | ≈ $0 |
+| **百炼文生图** | 新人额度 + **按张计费**（用完要充） |
+| **HF → fal** | Free 约 **$0.10/月** 赠送，超额需买 credits |
+
+**不是**「整站永久 $0」。对访客可以免费，站长需看账单：
+
+- 百炼控制台用量  
+- https://huggingface.co/settings/billing  
 
 ## 🏗 Architecture
 
 ```
-Browser → Vercel (Next.js) → HF Router (fal-ai Z-Image-Turbo ~5s)
-                                    ↓ image URL
-                              Download image bytes
-                                    ↓
-                           Cloudflare R2 → public URL
-                                    ↓
-                            Returns to browser
+Browser → Vercel (Next.js)
+            ├─ IMAGE_PROVIDER=dashscope → 阿里云百炼 (z-image / qwen-image)
+            └─ IMAGE_PROVIDER=hf        → HF Router → fal-ai Z-Image-Turbo
+                    ↓ image bytes
+              Cloudflare R2 → public URL
 ```
 
-- **Sync generation** — no polling, no task queue, no Redis
-- Z-Image-Turbo inference takes ~5 seconds
-- Vercel free tier has 10s timeout — fits perfectly
-
-## 🛡 Content Policy
-
-This stack has **zero content filtering**:
-- Z-Image-Turbo is a raw 6B DiT model with no safety classifier
-- fal-ai provider does not censor prompts
-- R2 storage does not scan uploaded content
-- Vercel does not inspect application payloads
-
-**You are responsible** for what you generate and host. Check local laws.
-
-## 🔧 Tech Stack
-
-- **Frontend**: Next.js 16 (App Router) + TypeScript + Tailwind CSS 4
-- **AI Model**: Tongyi-MAI/Z-Image-Turbo via HF Router → fal-ai (6B S3-DiT, 8-step)
-- **Storage**: Cloudflare R2 (S3-compatible, global CDN)
-- **Hosting**: Vercel (edge deployment, free tier)
+- 切换：环境变量 `IMAGE_PROVIDER` + 对应 Key  
+- 响应：`{ imageUrl, seed, provider, model }`
 
 ## 📁 Project Structure
 
 ```
 src/
 ├── app/
-│   ├── layout.tsx          # Root layout + SEO + analytics
-│   ├── page.tsx            # Main UI: input, ratios, results
-│   ├── globals.css         # Dark theme, glassmorphism
-│   └── api/generate/
-│       └── route.ts        # POST endpoint: HF → R2 → URL
+│   ├── api/generate/route.ts   # POST 生图
+│   ├── api/health/route.ts     # 健康检查（含当前 provider）
+│   └── page.tsx
 └── lib/
-    ├── dimensions.ts       # Shared image dimensions
-    ├── hf.ts               # HF Router + fal-ai inference client
-    └── r2.ts               # R2 upload with AWS SigV4
+    ├── generate.ts             # 统一入口 / 切换
+    ├── dashscope.ts            # 百炼
+    ├── hf.ts                   # HF fal
+    ├── r2.ts
+    └── dimensions.ts
+```
+
+## 🔧 常用命令
+
+```bash
+npm run check-env
+npm run dev
+npm run build
 ```
 
 ## 📝 License
 
-MIT — do whatever you want.
+MIT

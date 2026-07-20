@@ -9,6 +9,9 @@
  */
 
 import { DIMENSIONS, AspectRatio } from "./dimensions";
+import type { GenerationResult } from "./types";
+
+export type { GenerationResult };
 
 const FAL_ZIMAGE_URL =
   "https://router.huggingface.co/fal-ai/fal-ai/z-image/turbo";
@@ -17,7 +20,7 @@ const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 export class HFModelLoadingError extends Error {
   retryAfter: number;
   constructor(sec: number = 15) {
-    super("Model is loading, retry later");
+    super("Model is warming up, retry later");
     this.name = "HFModelLoadingError";
     this.retryAfter = sec;
   }
@@ -28,11 +31,6 @@ export class HFRateLimitError extends Error {
     super("Rate limited by HuggingFace");
     this.name = "HFRateLimitError";
   }
-}
-
-export interface GenerationResult {
-  imageBytes: Buffer;
-  seed: number;
 }
 
 interface FalImageResponse {
