@@ -1,6 +1,6 @@
 # 🎨 AI Free Image Generator
 
-> **Zero-cost AI image generator — Z-Image-Turbo + Vercel + Cloudflare R2**
+> **AI image generator — Z-Image-Turbo + Vercel + Cloudflare R2**
 
 Turn words into stunning images for free. No sign-up, no limits, no content filtering.
 
@@ -17,7 +17,7 @@ npm run dev
 
 Open http://localhost:3000 and start generating.
 
-## 🔑 Getting Your API Keys (Free)
+## 🔑 Getting Your API Keys
 
 ### HuggingFace (AI Model)
 1. Sign up: https://huggingface.co/join
@@ -46,7 +46,7 @@ Open http://localhost:3000 and start generating.
 4. Add all environment variables (same as `.env.local`)
 5. Deploy
 
-**That's it.** Your site is live at `https://your-project.vercel.app`.
+**Live at**: `https://ai-image-free.vercel.app`
 
 ## 💰 Monetization (Optional)
 
@@ -57,31 +57,26 @@ Add Google AdSense:
 4. Uncomment the AdSense script in `src/app/layout.tsx`
 5. Replace the placeholder banner in `src/app/page.tsx`
 
-## 📊 Cost Breakdown: **$0/month**
+## 📊 Cost Breakdown
 
-| Service | Monthly Free Tier | What We Use |
-|---------|------------------|-------------|
-| Vercel | 100 GB bandwidth, 1M function calls | Hosting & API |
-| HuggingFace | Free inference API (~30 req/min) | Image generation |
-| Cloudflare R2 | 10 GB storage, 10M reads | Image storage & CDN |
-| **Total** | | **$0.00** |
+| Service | Monthly Free Tier | Notes |
+|---------|------------------|-------|
+| Vercel | 100 GB bandwidth, 1M function calls | ✅ Free |
+| Cloudflare R2 | 10 GB storage, 10M reads | ✅ Free |
+| **HF Router + fal-ai** | **Free tier + pay-per-use** | ⚠️ Check `huggingface.co/settings/billing` |
 
-## 📈 Revenue Estimates
-
-| Daily Visitors | AdSense RPM | Monthly Revenue |
-|---------------|-------------|-----------------|
-| 1,000 | $3-6 | $90-180 |
-| 2,000-5,000 | $3-6 | $180-900 |
-| 10,000+ | $3-6 | $900-1,800 |
+> ⚠️ Z-Image-Turbo is NOT on HF's free inference API. It runs through HF Router → fal-ai provider, which has a free tier but may charge after. Check your HF billing page for actual costs.
 
 ## 🏗 Architecture
 
 ```
-Browser → Vercel (Next.js) → HuggingFace (Z-Image-Turbo ~5s)
-                                    ↓ image bytes
-                             Cloudflare R2 → public URL
+Browser → Vercel (Next.js) → HF Router (fal-ai Z-Image-Turbo ~5s)
+                                    ↓ image URL
+                              Download image bytes
                                     ↓
-                              Returns to browser
+                           Cloudflare R2 → public URL
+                                    ↓
+                            Returns to browser
 ```
 
 - **Sync generation** — no polling, no task queue, no Redis
@@ -92,7 +87,7 @@ Browser → Vercel (Next.js) → HuggingFace (Z-Image-Turbo ~5s)
 
 This stack has **zero content filtering**:
 - Z-Image-Turbo is a raw 6B DiT model with no safety classifier
-- HuggingFace inference API does not censor prompts
+- fal-ai provider does not censor prompts
 - R2 storage does not scan uploaded content
 - Vercel does not inspect application payloads
 
@@ -101,7 +96,7 @@ This stack has **zero content filtering**:
 ## 🔧 Tech Stack
 
 - **Frontend**: Next.js 16 (App Router) + TypeScript + Tailwind CSS 4
-- **AI Model**: Tongyi-MAI/Z-Image-Turbo (Alibaba, 6B S3-DiT, 8-step inference)
+- **AI Model**: Tongyi-MAI/Z-Image-Turbo via HF Router → fal-ai (6B S3-DiT, 8-step)
 - **Storage**: Cloudflare R2 (S3-compatible, global CDN)
 - **Hosting**: Vercel (edge deployment, free tier)
 
@@ -116,20 +111,10 @@ src/
 │   └── api/generate/
 │       └── route.ts        # POST endpoint: HF → R2 → URL
 └── lib/
-    ├── hf.ts               # HuggingFace inference client
+    ├── dimensions.ts       # Shared image dimensions
+    ├── hf.ts               # HF Router + fal-ai inference client
     └── r2.ts               # R2 upload with AWS SigV4
 ```
-
-## 🆚 vs imagefree.net (Original)
-
-| | This Clone | Original |
-|---|---|---|
-| Architecture | Sync (simpler) | Polling (taskId) |
-| Latency | ~5s | ~5s (Vercel path) |
-| Cost | $0/mo | $0/mo |
-| Content filtering | None | None |
-| Image storage | R2 | R2 (2 buckets) |
-| Monetization | AdSense | AdSense |
 
 ## 📝 License
 
