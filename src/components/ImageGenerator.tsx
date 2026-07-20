@@ -21,10 +21,10 @@ const ASPECT_RATIOS: { value: AspectRatio; label: string }[] = [
   { value: "3:4", label: "3:4" },
 ];
 
-/** 前端可选模型：fal 弱审；百炼千问/万相有平台审核 */
+/** 前端可选模型：默认 HF 透传（成人向更松）；fal 备用；百炼有审 */
 type ModelChoice = {
   id: string;
-  provider: "fal" | "dashscope";
+  provider: "hf" | "fal" | "dashscope";
   model?: string;
   labelEn: string;
   labelZh: string;
@@ -34,12 +34,20 @@ type ModelChoice = {
 
 const MODEL_CHOICES: ModelChoice[] = [
   {
+    id: "hf-z",
+    provider: "hf",
+    labelEn: "Z-Image (HF · default)",
+    labelZh: "Z-Image 推荐",
+    hintEn: "Via HF Router · looser filters (tested)",
+    hintZh: "HF 透传 · 成人向更松（实测）",
+  },
+  {
     id: "fal-z",
     provider: "fal",
-    labelEn: "Z-Image Turbo (fast)",
-    labelZh: "Z-Image 快速",
-    hintEn: "Cheap & fast · weaker filters (fal)",
-    hintZh: "便宜快 · 弱审（fal 直连）",
+    labelEn: "Z-Image (fal direct)",
+    labelZh: "Z-Image fal直连",
+    hintEn: "Backup when HF credits empty · stricter NSFW",
+    hintZh: "HF 没额度时备用 · 成人向更严",
   },
   {
     id: "qwen-2",
@@ -73,7 +81,7 @@ const MODEL_CHOICES: ModelChoice[] = [
 const COPY = {
   en: {
     title: "AI Image Generator",
-    subtitle: "Turn words into stunning images. Pick a model below.",
+    subtitle: "Default: Z-Image via HF (looser). fal = backup. Qwen = moderated.",
     placeholder:
       "Describe the image you want to create... e.g. A magical forest with glowing mushrooms, digital art",
     ratio: "Ratio",
@@ -96,7 +104,7 @@ const COPY = {
   },
   zh: {
     title: "免费 AI 图片生成器",
-    subtitle: "可选 Z-Image / 千问 / 万相 · 有频率限制",
+    subtitle: "默认 HF 透传 Z-Image（成人向更松）· fal 备用 · 千问有审",
     placeholder:
       "描述你想生成的图片… 例如：雨夜霓虹街头的小提琴手，电影感，浅景深",
     ratio: "比例",
@@ -149,7 +157,7 @@ export default function ImageGenerator({ locale = "en" }: Props) {
 
   const [prompt, setPrompt] = useState("");
   const [ratio, setRatio] = useState<AspectRatio>("1:1");
-  const [modelId, setModelId] = useState("fal-z");
+  const [modelId, setModelId] = useState("hf-z");
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [genState, setGenState] = useState<GenerationState>({
     status: "idle",

@@ -14,8 +14,8 @@ export async function GET() {
     provider: resolveProvider(),
     nsfwMode: nsfw,
     contentNote: nsfw
-      ? "hf/fal Z-Image path; platform filters weak — legal adult only; no DashScope"
-      : "provider per IMAGE_PROVIDER",
+      ? "default HF Router→fal (looser NSFW tested); fal direct stricter; Bailian moderated"
+      : "provider per IMAGE_PROVIDER (default prefers HF)",
     hasFalKey: Boolean(
       process.env.FAL_KEY?.trim() || process.env.FAL_API_KEY?.trim()
     ),

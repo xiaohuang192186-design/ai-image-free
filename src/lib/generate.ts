@@ -1,11 +1,14 @@
 /**
  * Unified image generation entry.
  *
- * 默认: fal 直连 Z-Image（成人向弱审、便宜）
- * 可选: dashscope 千问 / 万相 / z-image（有平台审核）
+ * 实测（2026-07-21）:
+ *   HF Router → fal : 成人向提示词可通过
+ *   fal.run 直连    : 同提示词常 422 content checker
+ *
+ * 因此默认优先 HF 透传；fal 作余额备用；百炼有强审。
  *
  * 请求体可带:
- *   provider: "fal" | "hf" | "dashscope"
+ *   provider: "hf" | "fal" | "dashscope"
  *   model:    "qwen-image-2.0" | "wan2.7-image-pro" | ...
  */
 
@@ -19,9 +22,7 @@ export type ImageProvider = "auto" | "dashscope" | "hf" | "fal";
 export type ResolvedProvider = "fal" | "hf" | "dashscope";
 
 export interface GenerateOptions {
-  /** 单次请求覆盖默认 provider */
   provider?: string;
-  /** 百炼模型名，如 qwen-image-2.0 */
   model?: string;
 }
 
@@ -53,36 +54,29 @@ function normalizeProvider(raw?: string): ResolvedProvider | null {
   return null;
 }
 
-/** 环境默认（无请求覆盖时） */
+/** 环境默认：HF 优先（成人向更松），其次 fal */
 export function resolveProvider(): ResolvedProvider {
   const fromEnv = normalizeProvider(process.env.IMAGE_PROVIDER);
+
   if (fromEnv === "dashscope") {
-    if (nsfwModeOn() && process.env.ALLOW_DASHSCOPE === "1") return "dashscope";
-    if (nsfwModeOn()) {
+    // 显式 dashscope；NSFW 默认仍挡，除非 ALLOW_DASHSCOPE=1
+    if (nsfwModeOn() && process.env.ALLOW_DASHSCOPE !== "1") {
+      if (hasHfToken()) return "hf";
       if (hasFalKey()) return "fal";
-      return "hf";
     }
     return "dashscope";
   }
-  if (fromEnv === "fal") return "fal";
   if (fromEnv === "hf") return "hf";
+  if (fromEnv === "fal") return "fal";
 
-  if (nsfwModeOn()) {
-    if (hasFalKey()) return "fal";
-    if (hasHfToken()) return "hf";
-    return "fal";
-  }
-
-  if (hasFalKey()) return "fal";
+  // auto / NSFW：HF → fal → dashscope(仅非 NSFW)
   if (hasHfToken()) return "hf";
-  if (hasDashScopeKey()) return "dashscope";
-  return "fal";
+  if (hasFalKey()) return "fal";
+  if (!nsfwModeOn() && hasDashScopeKey()) return "dashscope";
+  return "hf";
 }
 
-/**
- * 解析本次请求用哪个 provider。
- * 用户在 UI 显式选「千问」时，即使 NSFW_MODE=1 也允许 dashscope（用户知情选择合规通道）。
- */
+/** 请求覆盖（UI 选模型时） */
 export function resolveProviderForRequest(override?: string): ResolvedProvider {
   const o = normalizeProvider(override);
   if (o) return o;
@@ -109,12 +103,33 @@ export async function generateImage(
     return generateWithFal(prompt, aspectRatio);
   }
 
-  const result = await generateWithHf(prompt, aspectRatio);
-  return {
-    ...result,
-    provider: "hf",
-    model: "Tongyi-MAI/Z-Image-Turbo (via HF Router→fal)",
-  };
+  // HF 透传（默认 / 成人向主路）
+  try {
+    const result = await generateWithHf(prompt, aspectRatio);
+    return {
+      ...result,
+      provider: "hf",
+      model: "Tongyi-MAI/Z-Image-Turbo (via HF Router→fal)",
+    };
+  } catch (err) {
+    // HF 额度用尽时自动降级 fal（普通图仍可用；成人向可能 422）
+    const msg = err instanceof Error ? err.message : String(err);
+    const creditOut =
+      msg.includes("402") ||
+      msg.includes("depleted") ||
+      msg.includes("credits") ||
+      msg.includes("Purchase pre-paid");
+    if (creditOut && hasFalKey()) {
+      console.warn(`[generate] HF failed (${msg.slice(0, 120)}), fallback fal`);
+      const fb = await generateWithFal(prompt, aspectRatio);
+      return {
+        ...fb,
+        provider: "fal",
+        model: "fal-ai/z-image/turbo (fallback after HF credit error)",
+      };
+    }
+    throw err;
+  }
 }
 
 export { HFModelLoadingError, HFRateLimitError } from "./hf";
