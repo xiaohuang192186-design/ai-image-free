@@ -116,7 +116,6 @@ export async function POST(request: NextRequest) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error(`[generate] FAILED (${err instanceof Error ? err.name : "unknown"}): ${message}`);
 
-    // Don't leak internal errors to clients
     return NextResponse.json(
       { error: "Generation failed. Please try again." },
       { status: 500 }

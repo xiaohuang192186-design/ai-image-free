@@ -1,15 +1,19 @@
 /**
- * HuggingFace Inference API client for Z-Image-Turbo.
- * Zero-dependency, pure fetch() implementation.
+ * HuggingFace Inference Providers client for Z-Image-Turbo.
+ * Uses fal-ai via HF router (model is NOT on free hf-inference).
+ *
+ * Endpoint (verified):
+ *   POST https://router.huggingface.co/fal-ai/fal-ai/z-image/turbo
+ * Response:
+ *   { images: [{ url }], seed, timings }
  */
 
 import { DIMENSIONS, AspectRatio } from "./dimensions";
 
-const HF_API_BASE = "https://api-inference.huggingface.co/models";
-const MODEL = "Tongyi-MAI/Z-Image-Turbo";
-const PNG_MAGIC = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+const FAL_ZIMAGE_URL =
+  "https://router.huggingface.co/fal-ai/fal-ai/z-image/turbo";
+const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 
-// Rate-limit / cold-start error codes we expose to the caller
 export class HFModelLoadingError extends Error {
   retryAfter: number;
   constructor(sec: number = 15) {
@@ -31,12 +35,16 @@ export interface GenerationResult {
   seed: number;
 }
 
+interface FalImageResponse {
+  images?: Array<{ url?: string; content_type?: string }>;
+  seed?: number;
+  error?: string;
+  detail?: string;
+}
+
 /**
- * Generate an image from a text prompt using Z-Image-Turbo.
- * ~5s on warm model, ~20s cold start (HF free tier).
- *
- * Does NOT sleep on the server for cold starts — throws HFModelLoadingError
- * immediately so the caller (API route) can tell the client to retry.
+ * Generate an image from a text prompt using Z-Image-Turbo (fal-ai provider).
+ * Typical latency ~1–5s on warm path.
  */
 export async function generateImage(
   prompt: string,
@@ -46,66 +54,96 @@ export async function generateImage(
   if (!token) throw new Error("HF_TOKEN not set");
 
   const size = DIMENSIONS[aspectRatio] || DIMENSIONS["1:1"];
+  const url = process.env.HF_FAL_URL || FAL_ZIMAGE_URL;
 
   const body = JSON.stringify({
-    inputs: prompt,
-    parameters: {
+    prompt,
+    image_size: {
       width: size.width,
       height: size.height,
-      num_inference_steps: 8,
-      guidance_scale: 0.0,
     },
+    num_inference_steps: 8,
+    enable_safety_checker: false,
   });
 
-  const url = `${HF_API_BASE}/${MODEL}`;
-
-  // First attempt (15s timeout — Vercel Hobby has ~10s hard cap;
-  // Pro users can raise it. This gives HF ~15s to start responding.)
-  let response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body,
-    signal: AbortSignal.timeout(15_000),
-  });
-
-  // Cold start: tell caller to retry later (don't sleep here!)
-  if (response.status === 503) {
-    const err = await response.json().catch(() => ({}));
-    if (err.error?.includes("loading") || err.estimated_time) {
-      const wait = err.estimated_time ?? 15;
-      throw new HFModelLoadingError(Math.ceil(wait));
-    }
+  let response: Response;
+  try {
+    // Hobby ~10s; fal warm path is usually under 2s
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body,
+      signal: AbortSignal.timeout(25_000),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`HF/fal network error: ${msg}`);
   }
 
-  // Rate limited
+  if (response.status === 503) {
+    throw new HFModelLoadingError(15);
+  }
   if (response.status === 429) {
     throw new HFRateLimitError();
   }
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`HF API error ${response.status}: ${text.slice(0, 200)}`);
-  }
-
-  // Validate we actually got an image
   const contentType = response.headers.get("content-type") ?? "";
-  const buf = Buffer.from(await response.arrayBuffer());
+  const raw = Buffer.from(await response.arrayBuffer());
 
-  if (!contentType.startsWith("image/") && buf.length > 0) {
-    // Check PNG magic bytes as fallback
-    const isPNG = buf.slice(0, 4).equals(PNG_MAGIC);
-    if (!isPNG) {
-      const preview = new TextDecoder().decode(buf.subarray(0, 200));
-      throw new Error(`HF returned non-image response (${contentType}): ${preview}`);
-    }
+  // Some providers return raw image bytes
+  if (contentType.startsWith("image/") || raw.subarray(0, 4).equals(PNG_MAGIC)) {
+    return { imageBytes: raw, seed: Date.now() };
   }
 
-  // Extract seed (may not be reliable on HF free tier)
-  const seedHeader = response.headers.get("x-hf-seed");
-  const seed = seedHeader ? parseInt(seedHeader, 10) : Date.now();
+  // fal-ai via HF router returns JSON with image URL
+  let parsed: FalImageResponse;
+  try {
+    parsed = JSON.parse(raw.toString("utf8")) as FalImageResponse;
+  } catch {
+    throw new Error(
+      `HF API error ${response.status}: ${raw.toString("utf8").slice(0, 200)}`
+    );
+  }
 
-  return { imageBytes: buf, seed };
+  if (!response.ok) {
+    throw new Error(
+      `HF API error ${response.status}: ${
+        parsed.error || parsed.detail || JSON.stringify(parsed).slice(0, 200)
+      }`
+    );
+  }
+
+  const imageUrl = parsed.images?.[0]?.url;
+  if (!imageUrl) {
+    throw new Error(
+      `HF returned no image URL: ${JSON.stringify(parsed).slice(0, 200)}`
+    );
+  }
+
+  let imgRes: Response;
+  try {
+    imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(20_000) });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(`Failed to download generated image: ${msg}`);
+  }
+
+  if (!imgRes.ok) {
+    throw new Error(`Image download failed HTTP ${imgRes.status}`);
+  }
+
+  const imageBytes = Buffer.from(await imgRes.arrayBuffer());
+  if (imageBytes.length < 100) {
+    throw new Error("Downloaded image is empty/too small");
+  }
+
+  const seed =
+    typeof parsed.seed === "number" && Number.isFinite(parsed.seed)
+      ? parsed.seed
+      : Date.now();
+
+  return { imageBytes, seed };
 }
