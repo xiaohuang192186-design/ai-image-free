@@ -86,10 +86,17 @@ export async function POST(request: NextRequest) {
   }
   const aspectRatio = rawRatio as AspectRatio;
 
+  // 可选：provider / model（千问、万相、fal）
+  const providerOverride =
+    typeof record.provider === "string" ? record.provider : undefined;
+  const modelOverride =
+    typeof record.model === "string" ? record.model : undefined;
+
   try {
     const { imageBytes, seed, provider, model } = await generateImage(
       prompt,
-      aspectRatio
+      aspectRatio,
+      { provider: providerOverride, model: modelOverride }
     );
 
     const filename = generateFilename(seed);
@@ -128,8 +135,13 @@ export async function POST(request: NextRequest) {
       `[generate] FAILED (${err instanceof Error ? err.name : "unknown"}): ${message}`
     );
 
+    // 短暂暴露 detail 便于切换 fal 后排障（不泄漏密钥）
     return NextResponse.json(
-      { error: "Generation failed. Please try again. / 生成失败，请重试。" },
+      {
+        error: "Generation failed. Please try again. / 生成失败，请重试。",
+        detail: message.slice(0, 280),
+        provider: resolveProvider(),
+      },
       { status: 500 }
     );
   }

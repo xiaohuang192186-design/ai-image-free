@@ -21,13 +21,63 @@ const ASPECT_RATIOS: { value: AspectRatio; label: string }[] = [
   { value: "3:4", label: "3:4" },
 ];
 
+/** 前端可选模型：fal 弱审；百炼千问/万相有平台审核 */
+type ModelChoice = {
+  id: string;
+  provider: "fal" | "dashscope";
+  model?: string;
+  labelEn: string;
+  labelZh: string;
+  hintEn: string;
+  hintZh: string;
+};
+
+const MODEL_CHOICES: ModelChoice[] = [
+  {
+    id: "fal-z",
+    provider: "fal",
+    labelEn: "Z-Image Turbo (fast)",
+    labelZh: "Z-Image 快速",
+    hintEn: "Cheap & fast · weaker filters (fal)",
+    hintZh: "便宜快 · 弱审（fal 直连）",
+  },
+  {
+    id: "qwen-2",
+    provider: "dashscope",
+    model: "qwen-image-2.0",
+    labelEn: "Qwen-Image 2.0",
+    labelZh: "千问 2.0",
+    hintEn: "Best text & edit · moderated (Bailian)",
+    hintZh: "文字/改图强 · 百炼有审核",
+  },
+  {
+    id: "qwen-2-pro",
+    provider: "dashscope",
+    model: "qwen-image-2.0-pro",
+    labelEn: "Qwen-Image 2.0 Pro",
+    labelZh: "千问 2.0 Pro",
+    hintEn: "Higher quality Qwen · moderated",
+    hintZh: "千问更高画质 · 有审核",
+  },
+  {
+    id: "wan-pro",
+    provider: "dashscope",
+    model: "wan2.7-image-pro",
+    labelEn: "Wan 2.7 Pro",
+    labelZh: "万相 2.7 Pro",
+    hintEn: "4K / complex scenes · moderated",
+    hintZh: "复杂指令/4K · 有审核",
+  },
+];
+
 const COPY = {
   en: {
     title: "AI Image Generator",
-    subtitle: "Turn words into stunning images for free. No sign-up required.",
+    subtitle: "Turn words into stunning images. Pick a model below.",
     placeholder:
       "Describe the image you want to create... e.g. A magical forest with glowing mushrooms, digital art",
     ratio: "Ratio",
+    model: "Model",
     generate: "Generate",
     generating: "Generating...",
     download: "Download",
@@ -38,7 +88,7 @@ const COPY = {
     emptyHint: "Enter a prompt above and click Generate",
     examples: "Try these examples",
     creating: "Creating your image...",
-    footer: "Powered by AI · Free to use · Rate limits apply to control costs",
+    footer: "Powered by AI · Rate limits apply · Bailian models are content-moderated",
     switchLang: "中文",
     switchHref: "/zh",
     needTurnstile: "Please complete human verification first.",
@@ -46,11 +96,12 @@ const COPY = {
   },
   zh: {
     title: "免费 AI 图片生成器",
-    subtitle: "无限灵感 · 无需登录 · 即时文生图（有合理频率限制）",
+    subtitle: "可选 Z-Image / 千问 / 万相 · 有频率限制",
     placeholder:
       "描述你想生成的图片… 例如：雨夜霓虹街头的小提琴手，电影感，浅景深",
     ratio: "比例",
-    generate: "免费生成",
+    model: "模型",
+    generate: "生成",
     generating: "生成中...",
     download: "下载",
     generateNew: "再生成一张",
@@ -60,7 +111,7 @@ const COPY = {
     emptyHint: "在上方输入描述，点击生成",
     examples: "试试这些提示词",
     creating: "正在创作你的图片...",
-    footer: "AI 驱动 · 免费使用 · 为控制成本设有频率限制",
+    footer: "AI 驱动 · 有频率限制 · 千问/万相走百炼内容审核",
     switchLang: "English",
     switchHref: "/",
     needTurnstile: "请先完成人机验证。",
@@ -98,6 +149,7 @@ export default function ImageGenerator({ locale = "en" }: Props) {
 
   const [prompt, setPrompt] = useState("");
   const [ratio, setRatio] = useState<AspectRatio>("1:1");
+  const [modelId, setModelId] = useState("fal-z");
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [genState, setGenState] = useState<GenerationState>({
     status: "idle",
@@ -133,6 +185,9 @@ export default function ImageGenerator({ locale = "en" }: Props) {
       retryAfter: null,
     });
 
+    const choice =
+      MODEL_CHOICES.find((m) => m.id === modelId) || MODEL_CHOICES[0];
+
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -140,6 +195,8 @@ export default function ImageGenerator({ locale = "en" }: Props) {
         body: JSON.stringify({
           prompt: trimmed,
           aspect_ratio: ratio,
+          provider: choice.provider,
+          ...(choice.model ? { model: choice.model } : {}),
           ...(turnstileToken ? { turnstile_token: turnstileToken } : {}),
         }),
       });
@@ -150,7 +207,10 @@ export default function ImageGenerator({ locale = "en" }: Props) {
         if (res.status === 503 && body.retryAfter) {
           throw { message: body.error, retryAfter: body.retryAfter };
         }
-        throw new Error(body.error || `Generation failed (HTTP ${res.status})`);
+        const extra = body.detail ? ` (${body.detail})` : "";
+        throw new Error(
+          (body.error || `Generation failed (HTTP ${res.status})`) + extra
+        );
       }
 
       if (!body.imageUrl) {
@@ -181,7 +241,16 @@ export default function ImageGenerator({ locale = "en" }: Props) {
         retryAfter,
       });
     }
-  }, [prompt, ratio, isLoading, siteKey, turnstileToken, t.needTurnstile, locale]);
+  }, [
+    prompt,
+    ratio,
+    modelId,
+    isLoading,
+    siteKey,
+    turnstileToken,
+    t.needTurnstile,
+    locale,
+  ]);
 
   const handleReset = useCallback(() => {
     setGenState({
@@ -268,6 +337,38 @@ export default function ImageGenerator({ locale = "en" }: Props) {
                          disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="prompt"
             />
+
+            {/* Model picker */}
+            <div className="mt-3 flex flex-col gap-1.5">
+              <span className="text-xs text-[#6b6b6b]">{t.model}</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {MODEL_CHOICES.map((m) => {
+                  const active = modelId === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      disabled={isLoading}
+                      onClick={() => setModelId(m.id)}
+                      className={`text-left px-3 py-2 rounded-lg border text-xs transition-all
+                        ${
+                          active
+                            ? "border-purple-500/60 bg-purple-500/15 text-white"
+                            : "border-white/10 bg-white/[0.03] text-[#a0a0a0] hover:bg-white/[0.06]"
+                        }
+                        disabled:opacity-50`}
+                    >
+                      <div className="font-medium">
+                        {locale === "zh" ? m.labelZh : m.labelEn}
+                      </div>
+                      <div className="text-[10px] opacity-70 mt-0.5">
+                        {locale === "zh" ? m.hintZh : m.hintEn}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             <div className="flex items-center gap-2 mt-3 flex-wrap">
               <span className="text-xs text-[#6b6b6b] mr-1 hidden sm:inline">

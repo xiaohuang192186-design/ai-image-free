@@ -23,7 +23,8 @@ export async function GET() {
     hasDashScopeKey: Boolean(process.env.DASHSCOPE_API_KEY),
     falEndpoint:
       process.env.FAL_MODEL_URL || "https://fal.run/fal-ai/z-image/turbo",
-    dashscopeModel: process.env.DASHSCOPE_MODEL || "z-image-turbo",
+    dashscopeModel: process.env.DASHSCOPE_MODEL || "qwen-image-2.0",
+    dashscopeReady: Boolean(process.env.DASHSCOPE_API_KEY?.trim()),
     turnstileRequired: isTurnstileRequired(),
     hasTurnstileSiteKey: Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY),
     rateLimit: {

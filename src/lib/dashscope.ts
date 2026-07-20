@@ -20,15 +20,16 @@ import type { GenerationResult } from "./types";
 const DEFAULT_BASE =
   "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
 
-/** 模型名 → 默认建议（可被 DASHSCOPE_MODEL 覆盖） */
+/** 常用百炼文生图模型（控制台开通后可用） */
 export const DASHSCOPE_MODELS = {
-  /** 通义 Z-Image-Turbo：快，和原站同系 */
   "z-image-turbo": "z-image-turbo",
-  /** 千问文生图（较新） */
   "qwen-image": "qwen-image",
   "qwen-image-plus": "qwen-image-plus",
   "qwen-image-2.0": "qwen-image-2.0",
   "qwen-image-2.0-pro": "qwen-image-2.0-pro",
+  "wan2.7-image": "wan2.7-image",
+  "wan2.7-image-pro": "wan2.7-image-pro",
+  "wan2.6-t2i": "wan2.6-t2i",
 } as const;
 
 /** DashScope size 字段常用 "宽*高" */
@@ -86,21 +87,25 @@ function extractImageUrl(payload: unknown): string | null {
 
 /**
  * 使用阿里云百炼生成图片，返回 PNG/JPEG bytes。
+ * @param modelOverride 单次请求模型，如 qwen-image-2.0 / wan2.7-image-pro
  */
 export async function generateWithDashScope(
   prompt: string,
-  aspectRatio: AspectRatio = "1:1"
+  aspectRatio: AspectRatio = "1:1",
+  modelOverride?: string
 ): Promise<GenerationResult> {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
+  const apiKey = process.env.DASHSCOPE_API_KEY?.trim();
   if (!apiKey) throw new Error("DASHSCOPE_API_KEY not set");
 
   const model =
+    modelOverride?.trim() ||
     process.env.DASHSCOPE_MODEL?.trim() ||
-    "z-image-turbo";
+    "qwen-image-2.0";
   const baseUrl =
     process.env.DASHSCOPE_BASE_URL?.replace(/\/+$/, "") || DEFAULT_BASE;
   const size = toDashScopeSize(aspectRatio);
   const watermark = process.env.DASHSCOPE_WATERMARK === "true";
+  // 千问建议可开 prompt_extend；要省钱/更快可设 DASHSCOPE_PROMPT_EXTEND=false
   const promptExtend = process.env.DASHSCOPE_PROMPT_EXTEND !== "false";
 
   const body = {
@@ -114,15 +119,17 @@ export async function generateWithDashScope(
       ],
     },
     parameters: {
-      // z-image / qwen-image 通用字段（不支持的会被忽略或报错时再收窄）
       size,
       n: 1,
       watermark,
       prompt_extend: promptExtend,
-      // 可选负向提示（部分模型支持）
       ...(process.env.DASHSCOPE_NEGATIVE_PROMPT
         ? { negative_prompt: process.env.DASHSCOPE_NEGATIVE_PROMPT }
-        : {}),
+        : {
+            // 默认给千问一点质量向负向（合规内容场景）
+            negative_prompt:
+              "低分辨率，低画质，肢体畸形，手指畸形，画面过饱和，文字模糊扭曲",
+          }),
     },
   };
 
