@@ -54,14 +54,23 @@ export async function generateImage(
   const size = DIMENSIONS[aspectRatio] || DIMENSIONS["1:1"];
   const url = process.env.HF_FAL_URL || FAL_ZIMAGE_URL;
 
+  // enable_safety_checker=false：关闭 fal 侧安全检查（仍须遵守法律与平台 ToS）
+  const safetyOn = ["1", "true", "yes"].includes(
+    (process.env.HF_SAFETY_CHECKER || "").toLowerCase()
+  );
+  const steps = Math.min(
+    20,
+    Math.max(4, parseInt(process.env.HF_INFERENCE_STEPS || "8", 10) || 8)
+  );
+
   const body = JSON.stringify({
     prompt,
     image_size: {
       width: size.width,
       height: size.height,
     },
-    num_inference_steps: 8,
-    enable_safety_checker: false,
+    num_inference_steps: steps,
+    enable_safety_checker: safetyOn,
   });
 
   let response: Response;

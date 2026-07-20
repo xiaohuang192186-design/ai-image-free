@@ -5,9 +5,17 @@ import { isTurnstileRequired } from "@/lib/turnstile";
 export const runtime = "nodejs";
 
 export async function GET() {
+  const nsfw =
+    ["1", "true", "yes", "on"].includes(
+      (process.env.NSFW_MODE || "").toLowerCase()
+    );
   return NextResponse.json({
     ok: true,
     provider: resolveProvider(),
+    nsfwMode: nsfw,
+    contentNote: nsfw
+      ? "hf/fal Z-Image path; platform filters weak — legal adult only; no DashScope"
+      : "provider per IMAGE_PROVIDER",
     hasHfToken: Boolean(process.env.HF_TOKEN),
     hasDashScopeKey: Boolean(process.env.DASHSCOPE_API_KEY),
     dashscopeModel: process.env.DASHSCOPE_MODEL || "z-image-turbo",
